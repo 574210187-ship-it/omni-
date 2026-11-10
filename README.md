@@ -47,6 +47,16 @@ clipflow-visual --help
 
 上述命令没有处理真实视频、没有连接飞书，也没有任何外部写入。
 
+### 受管环境的 TLS/CA 提示
+
+如果 `pip` 报 `CERTIFICATE_VERIFY_FAILED`，先确认执行环境网络是获准的，并使用该环境提供的可信系统 CA 文件；不要用 `--trusted-host`、`-k` 或关闭证书验证。例如，Linux 环境明确将系统 CA 绑定在 `/etc/ssl/certs/ca-certificates.crt` 时：
+
+```bash
+PIP_CERT=/etc/ssl/certs/ca-certificates.crt python -m pip install -e .
+```
+
+该路径仅是常见 Linux 示例；应以执行环境的实际可信 CA 配置为准。
+
 ## 本地视频试跑
 
 仅使用已授权的非敏感测试视频，并把输出放在一个**不存在或为空**的目录中：

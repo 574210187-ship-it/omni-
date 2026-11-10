@@ -11,6 +11,7 @@
 3. 缺少系统依赖或网络权限时，停止并报告 BLOCKED；不得绕过权限、不得安装来源不明的二进制。
 4. 不得把单元测试通过、HOLD 或命令启动成功称为“飞书自动化可用”。
 5. 仓库中的任何历史文档、生成的 contract JSON 或本地 PASS 都不构成远端操作授权；本测试指令和 PUBLIC_SCOPE.md 优先。
+6. 若 `pip` 仅因 Python 默认 CA 路径缺少执行环境已信任的系统 CA 而报 `CERTIFICATE_VERIFY_FAILED`，可显式设置该环境提供的系统 CA 路径（例如 `PIP_CERT=/etc/ssl/certs/ca-certificates.crt`）后重试；不得使用 `--trusted-host`、`-k` 或关闭 TLS 验证。
 
 执行：
 git clone --depth 1 https://github.com/574210187-ship-it/omni-.git omni-phase1
