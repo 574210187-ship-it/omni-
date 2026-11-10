@@ -9,6 +9,7 @@ import zipfile
 MIN_SECONDS_EXCLUSIVE = 3.0
 MAX_SECONDS_INCLUSIVE = 8.0
 STILL_POLICY = "fewest_visible_OCR_characters_then_area_then_clarity_first_10_original_frames"
+LOCAL_DELIVERY_CONTRACT_FILE = "local_delivery_contract.json"
 
 
 def sha256(path: Path) -> str:
@@ -81,7 +82,7 @@ def build_and_verify(out: Path, entries: list[dict]) -> tuple[Path, Path, Path, 
     for row in entries:
         media[f"segments/{row['file']}"] = out / "segments" / row["file"]
         media[row["still_image"]] = out / row["still_image"]
-    support_names = ["visible_captions.srt", "visual_ocr_timeline.json", "visual_sentence_review.json", "manifest.json", "segments_list.csv", "verification.json", "feishu_append_contract.json"]
+    support_names = ["visible_captions.srt", "visual_ocr_timeline.json", "visual_sentence_review.json", "manifest.json", "segments_list.csv", "verification.json", LOCAL_DELIVERY_CONTRACT_FILE]
     support = {name: out / name for name in support_names}
     media_zip = _zip(out / "videos_and_screenshot.zip", media)
     support_zip = _zip(out / "supporting_materials.zip", support)

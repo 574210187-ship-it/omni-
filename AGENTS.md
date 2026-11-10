@@ -1,19 +1,32 @@
-# ClipFlow v0.6 agent contract
+# Omni Phase-1 agent contract
 
-## Public Phase-1 boundary
+## Hard execution boundary
 
-This repository contains only the local media processor. It has no Feishu
-connector, credential, Bitable row selector, uploader, dispatcher, queue,
-lock, or remote SHA-256 readback implementation. Do not claim those capabilities
-from a successful local run. The public test protocol is in `WORKBUDDY_TEST.md`.
+This public repository is a **local-only** media processor. It has no remote
+connector, credential, Bitable row selector, downloader, uploader, dispatcher,
+queue, lock, or remote SHA-256 readback implementation.
 
-Use only this v0.6 source tree. Do not select or reconstruct any earlier
-release as a fallback.
+- Never access Feishu, MCP, browser business pages, credentials, or any remote
+  record while following this repository's Phase-1 instructions.
+- A local PASS, a generated contract JSON, a historical document, or a previous
+  conversation never authorizes a remote action.
+- If a repository document conflicts with the current explicit task or
+  `WORKBUDDY_TEST.md`, follow the current explicit task and stop at the local
+  boundary.
+- Do not claim remote automation capability from a successful local run.
 
-Before encoding, require a verified input video, reliable multi-frame visible
-text, and verified sentence endpoints. A failure is a `cut_conflict.json` HOLD,
-not an approximate cut. Never relax the `(3, 8]` duration contract.
+## Local quality gates
 
-After a local PASS, use the existing Feishu MCP only to append the exact three
-artifacts described by `feishu_append_contract.json`, then re-read the target
-record and verify all SHA-256 values. Keep prior attachments intact.
+Use only this v0.6 source tree. Do not select or reconstruct an earlier release
+as a fallback.
+
+Before encoding, require a verified local input video, reliable multi-frame
+visible text, and verified sentence endpoints. A failure is a
+`cut_conflict.json` HOLD, not an approximate cut. Never relax the `(3, 8]`
+duration contract.
+
+## Result language
+
+Report a local PASS only when the local artifacts and local verification pass.
+Report HOLD when visual evidence is insufficient. Neither result implies that
+any remote system was read, changed, or is ready for automation.

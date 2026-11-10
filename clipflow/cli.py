@@ -14,7 +14,7 @@ import sys
 
 from . import __version__
 from .cut_planner import CutConflict, VisualCue, merge_reviewed_boundaries, plan_cuts
-from .delivery import build_and_verify, sha256
+from .delivery import LOCAL_DELIVERY_CONTRACT_FILE, build_and_verify, sha256
 from .stills import export_still
 from .visual_ocr import cue_rows, scan_video
 
@@ -186,8 +186,13 @@ def run(args: argparse.Namespace) -> int:
     manifest = {"program_version": __version__, "source_sha256": sha256(source), "source_video_info": info, "visual_only": True, "cuts": cuts, "segments": entries}
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     _write_csv(out, entries)
-    contract = {"mode": "append_only", "target_field": "处理后音、视频", "artifacts": ["videos_and_screenshot.zip", "supporting_materials.zip", "文案.txt"], "remote_readback_required": True, "uploader": "existing_bitable_mcp"}
-    (out / "feishu_append_contract.json").write_text(json.dumps(contract, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    contract = {
+        "mode": "local_only",
+        "artifacts": ["videos_and_screenshot.zip", "supporting_materials.zip", "文案.txt"],
+        "remote_actions_authorized": False,
+        "note": "Phase-1 package: local delivery only; no remote upload or record update is implemented or authorized.",
+    }
+    (out / LOCAL_DELIVERY_CONTRACT_FILE).write_text(json.dumps(contract, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     # Placeholder permits the package verifier to include its own final receipt.
     (out / "verification.json").write_text("{}\n", encoding="utf-8")
     media, support, script, verification = build_and_verify(out, entries)

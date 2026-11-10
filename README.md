@@ -34,7 +34,7 @@
 ## 最小环境验证
 
 ```bash
-git clone https://github.com/574210187-ship-it/omni第一阶段.git omni-phase1
+git clone https://github.com/574210187-ship-it/omni-.git omni-phase1
 cd omni-phase1
 python3 -m venv .venv
 . .venv/bin/activate
@@ -78,8 +78,8 @@ clipflow-visual run --input /absolute/path/to/test.mp4 --out ./output-reviewed -
 - [PUBLIC_SCOPE.md](PUBLIC_SCOPE.md)：公开第一阶段边界与验收标准
 - [SOURCE_PROVENANCE.md](SOURCE_PROVENANCE.md)：源代码基线与许可证说明
 - [AGENTS.md](AGENTS.md)：处理门槛
-- [ONLINE_WORK_MODE.md](ONLINE_WORK_MODE.md)：下一阶段在线流程的接口约束，不是本仓库已实现的自动化
-- [BITABLE_WORKFLOW.md](BITABLE_WORKFLOW.md)：飞书写入契约说明，不含远端写入代码
+
+GitHub 仓库 slug 为 `omni-`；项目可读名称为“Omni 第一阶段”。
 
 ## 许可证
 

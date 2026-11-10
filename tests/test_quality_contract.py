@@ -1,6 +1,10 @@
+from pathlib import Path
+import tempfile
 import unittest
+import zipfile
 
 from clipflow.cut_planner import CutConflict, VerifiedBoundary, VisualCue, merge_reviewed_boundaries, plan_cuts
+from clipflow.delivery import LOCAL_DELIVERY_CONTRACT_FILE, STILL_POLICY, build_and_verify
 from clipflow.visual_ocr import consolidate_observations
 
 
@@ -30,6 +34,33 @@ class QualityContractTests(unittest.TestCase):
     def test_one_isolated_read_is_not_a_reliable_visual_cue(self):
         cues = consolidate_observations([{"time": 1.0, "text": "偶发文字", "confidence": .90, "coverage": .02}], 4.0, .35)
         self.assertEqual(cues, [])
+
+    def test_support_package_has_only_local_delivery_contract(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out = Path(temp_dir)
+            (out / "segments").mkdir()
+            (out / "segment_stills").mkdir()
+            (out / "segments" / "001_镜头.mp4").write_bytes(b"video")
+            (out / "segment_stills" / "001_镜头.jpg").write_bytes(b"still")
+            (out / "文案.txt").write_text("可见文字\n", encoding="utf-8")
+            for filename in ["visible_captions.srt", "visual_ocr_timeline.json", "visual_sentence_review.json", "manifest.json", "segments_list.csv", "verification.json", LOCAL_DELIVERY_CONTRACT_FILE]:
+                (out / filename).write_text("{}\n", encoding="utf-8")
+            entries = [{
+                "index": 1,
+                "file": "001_镜头.mp4",
+                "start": 0.0,
+                "end": 5.0,
+                "encoded_duration": 5.0,
+                "still_image": "segment_stills/001_镜头.jpg",
+                "still_selection_policy": STILL_POLICY,
+                "still_offset_frame_index": 0,
+                "still_sequence_number": "001",
+                "still_has_sequence_watermark": True,
+            }]
+            _media, support, _script, _verification = build_and_verify(out, entries)
+            with zipfile.ZipFile(support) as archive:
+                self.assertIn(LOCAL_DELIVERY_CONTRACT_FILE, archive.namelist())
+                self.assertNotIn("feishu_append_contract.json", archive.namelist())
 
 
 if __name__ == "__main__":
