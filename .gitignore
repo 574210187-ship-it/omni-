@@ -1,0 +1,26 @@
+# Python build/runtime files
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Generated ClipFlow artifacts and local review material
+output/
+output-*/
+test-output/
+cut_conflict.json
+visual_ocr_timeline.json
+visual_sentence_review.json
+videos_and_screenshot.zip
+supporting_materials.zip
+文案.txt
+
+# Never publish source media, credentials, or local agent state
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.webm
+.env
+.workbuddy/
