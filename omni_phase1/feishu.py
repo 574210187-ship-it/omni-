@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 import time
 from typing import Any, Iterator
-from urllib.parse import urlparse
 import zlib
 
 import requests
@@ -387,22 +386,20 @@ class FeishuClient:
         token = attachment.get("file_token")
         if not isinstance(token, str) or not token:
             raise FeishuAPIError("attachment is missing file_token")
-        url = attachment.get("url")
-        if isinstance(url, str) and url:
-            parsed = urlparse(url)
-            if parsed.scheme != "https" or parsed.hostname != urlparse(self.binding.api_base).hostname:
-                raise FeishuAPIError("attachment URL is not a Feishu API URL")
-            request_url = url
-            params = None
-        else:
-            request_url = self._url(f"/open-apis/drive/v1/medias/{token}/download")
-            extra = {
-                "bitablePerm": {
-                    "tableId": self.binding.table_id,
-                    "attachments": {field_id: {record_id: [token]}},
-                }
+        # Always use the documented media endpoint and always include the
+        # Bitable authorization context.  A record can expose a convenient
+        # ``url`` even when Advanced Permissions are enabled, but that URL
+        # still needs ``extra`` or Feishu returns HTTP 400.  Using one
+        # canonical endpoint also prevents an attachment payload from
+        # choosing an arbitrary download host.
+        request_url = self._url(f"/open-apis/drive/v1/medias/{token}/download")
+        extra = {
+            "bitablePerm": {
+                "tableId": self.binding.table_id,
+                "attachments": {field_id: {record_id: [token]}},
             }
-            params = {"extra": json.dumps(extra, separators=(",", ":"))}
+        }
+        params = {"extra": json.dumps(extra, separators=(",", ":"))}
         target = Path(destination)
         target.parent.mkdir(parents=True, exist_ok=True)
         partial = target.with_name("." + target.name + ".partial")

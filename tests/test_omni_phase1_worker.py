@@ -198,6 +198,27 @@ class OmniPhase1WorkerTests(unittest.TestCase):
                 {"file_token": "new-token", "name": "文案.txt"},
             ])
 
+    def test_drain_includes_interrupted_verification_with_all_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path, env = write_config(Path(temp))
+            config = load_config(path, env)
+            complete = [{"name": name, "file_token": f"token-{index}"} for index, name in enumerate(config.artifacts)]
+            client = FakeClient(records=[record("rec-verify", output_items=complete, status="RETRYABLE")])
+
+            class RecordingWorker(OmniWorker):
+                def __init__(self, worker_config, worker_client):
+                    super().__init__(worker_config, worker_client)
+                    self.seen = []
+
+                def process_record(self, record_id):
+                    self.seen.append(record_id)
+                    return {"record_id": record_id, "result": "COMPLETED"}
+
+            worker = RecordingWorker(config, client)
+            result = worker.drain()
+            self.assertEqual(worker.seen, ["rec-verify"])
+            self.assertEqual(result["counts"], {"COMPLETED": 1})
+
 
 class _Response:
     status_code = 200
@@ -212,6 +233,29 @@ class _Session:
         return _Response()
 
 
+class _DownloadResponse:
+    status_code = 200
+    headers = {}
+
+    def iter_content(self, chunk_size):
+        del chunk_size
+        yield b"video-bytes"
+
+
+class _DownloadSession:
+    def __init__(self):
+        self.download_url = None
+        self.download_kwargs = None
+
+    def request(self, *_args, **_kwargs):
+        return _Response()
+
+    def get(self, url, **kwargs):
+        self.download_url = url
+        self.download_kwargs = kwargs
+        return _DownloadResponse()
+
+
 class FeishuAdapterTests(unittest.TestCase):
     def test_token_endpoint_uses_top_level_response_not_data_wrapper(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -219,6 +263,31 @@ class FeishuAdapterTests(unittest.TestCase):
             config = load_config(path, env)
         client = FeishuClient(config.binding, session=_Session(), sleep=lambda _seconds: None)
         self.assertEqual(client._tenant_token(), "t-test")
+
+    def test_bitable_download_always_uses_canonical_endpoint_and_extra(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path, env = write_config(root)
+            config = load_config(path, env)
+            session = _DownloadSession()
+            client = FeishuClient(config.binding, session=session, sleep=lambda _seconds: None)
+            destination = root / "input.mp4"
+            client.download_attachment(
+                {"file_token": "file-token", "url": "https://untrusted.example/ignored"},
+                field_id="fldOutput",
+                record_id="rec1",
+                destination=destination,
+            )
+            self.assertEqual(
+                session.download_url,
+                "https://open.feishu.cn/open-apis/drive/v1/medias/file-token/download",
+            )
+            extra = json.loads(session.download_kwargs["params"]["extra"])
+            self.assertEqual(
+                extra,
+                {"bitablePerm": {"tableId": "tblDRAMA", "attachments": {"fldOutput": {"rec1": ["file-token"]}}}},
+            )
+            self.assertEqual(destination.read_bytes(), b"video-bytes")
 
 
 if __name__ == "__main__":

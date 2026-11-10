@@ -463,11 +463,40 @@ class OmniWorker:
             remote_hashes[name] = digest
         return remote_hashes
 
-    def _terminal(self, record_id: str, run_id: str, phase: str, evidence: dict[str, Any]) -> None:
+    def _terminal(
+        self,
+        record_id: str,
+        run_id: str,
+        phase: str,
+        evidence: dict[str, Any],
+    ) -> Exception | None:
+        """Attempt a terminal transition without ever disguising a failure as success."""
         try:
             self._transition(record_id, run_id, phase, evidence=evidence, terminal=True)
-        except (LockLost, FeishuAPIError, WorkflowError):
-            pass
+        except (LockLost, FeishuAPIError, WorkflowError) as exc:
+            return exc
+        return None
+
+    @staticmethod
+    def _terminal_failure_result(
+        record_id: str,
+        run_id: str,
+        intended_phase: str,
+        error: Exception,
+    ) -> dict[str, Any]:
+        if isinstance(error, LockLost):
+            return {"record_id": record_id, "run_id": run_id, "result": "LOCK_LOST", "reason": str(error)}
+        return {
+            "record_id": record_id,
+            "run_id": run_id,
+            "result": "RETRYABLE",
+            "evidence": {
+                "code": "TERMINAL_STATE_WRITE_FAILED",
+                "intended_state": intended_phase,
+                "reason": str(error),
+                "retryable": True,
+            },
+        }
 
     def _complete(
         self,
@@ -482,12 +511,14 @@ class OmniWorker:
             self._attach_one(record_id, run_id, local[artifact])
         self._transition(record_id, run_id, "VERIFYING")
         remote_hashes = self._verify_remote_artifacts(record_id, run_id, local, run_dir)
-        self._terminal(
+        terminal_error = self._terminal(
             record_id,
             run_id,
             "COMPLETED",
             {"remote_sha256": remote_hashes, "input_sha256": input_digest},
         )
+        if terminal_error:
+            return self._terminal_failure_result(record_id, run_id, "COMPLETED", terminal_error)
         receipt = {
             "record_id": record_id,
             "run_id": run_id,
@@ -577,7 +608,9 @@ class OmniWorker:
                         detail["cut_conflict"] = json.loads(conflict.read_text(encoding="utf-8"))
                     except json.JSONDecodeError:
                         detail["cut_conflict"] = "unparseable local cut_conflict.json"
-                self._terminal(record_id, run_id, "HOLD", detail)
+                terminal_error = self._terminal(record_id, run_id, "HOLD", detail)
+                if terminal_error:
+                    return self._terminal_failure_result(record_id, run_id, "HOLD", terminal_error)
                 return {"record_id": record_id, "run_id": run_id, "result": "HOLD", "evidence": detail}
             if returncode != 0:
                 raise WorkflowError(
@@ -589,14 +622,18 @@ class OmniWorker:
             return self._complete(record_id, run_id, local, run_dir, input_digest)
         except HoldRequired as exc:
             detail = {"code": exc.code, "reason": str(exc)}
-            self._terminal(record_id, run_id, "HOLD", detail)
+            terminal_error = self._terminal(record_id, run_id, "HOLD", detail)
+            if terminal_error:
+                return self._terminal_failure_result(record_id, run_id, "HOLD", terminal_error)
             return {"record_id": record_id, "run_id": run_id, "result": "HOLD", "evidence": detail}
         except LockLost as exc:
             return {"record_id": record_id, "run_id": run_id, "result": "LOCK_LOST", "reason": str(exc)}
         except (WorkflowError, FeishuAPIError, OSError, subprocess.SubprocessError) as exc:
             retryable = getattr(exc, "retryable", True)
             detail = {"code": getattr(exc, "code", "UNEXPECTED_ERROR"), "reason": str(exc), "retryable": retryable}
-            self._terminal(record_id, run_id, "RETRYABLE", detail)
+            terminal_error = self._terminal(record_id, run_id, "RETRYABLE", detail)
+            if terminal_error:
+                return self._terminal_failure_result(record_id, run_id, "RETRYABLE", terminal_error)
             return {"record_id": record_id, "run_id": run_id, "result": "RETRYABLE", "evidence": detail}
 
     def drain(self, *, max_records: int | None = None) -> dict[str, Any]:
@@ -610,7 +647,7 @@ class OmniWorker:
                 for record in self.client.iter_records():
                     decision = classify_record(self.config, record)
                     if decision.record_id not in attempted and decision.kind in {
-                        "READY", "RESUME", "INPUT_HOLD", "PARTIAL_HOLD", "INCONSISTENT",
+                        "READY", "RESUME", "VERIFY_RESUME", "INPUT_HOLD", "PARTIAL_HOLD", "INCONSISTENT",
                     }:
                         selected = decision
                         break
