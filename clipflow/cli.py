@@ -187,10 +187,10 @@ def run(args: argparse.Namespace) -> int:
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     _write_csv(out, entries)
     contract = {
-        "mode": "local_only",
+        "mode": "clipflow_local_core",
         "artifacts": ["videos_and_screenshot.zip", "supporting_materials.zip", "文案.txt"],
         "remote_actions_authorized": False,
-        "note": "Phase-1 package: local delivery only; no remote upload or record update is implemented or authorized.",
+        "note": "The ClipFlow core itself makes no remote calls. A separately invoked omni-phase1 worker may perform explicit --apply Bitable work after private configuration validation.",
     }
     (out / LOCAL_DELIVERY_CONTRACT_FILE).write_text(json.dumps(contract, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     # Placeholder permits the package verifier to include its own final receipt.
@@ -201,7 +201,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="clipflow-visual", description="ClipFlow v0.6 visual-only strict splitter")
+    parser = argparse.ArgumentParser(prog="clipflow-visual", description=f"ClipFlow v{__version__} visual-only strict splitter")
     parser.add_argument("run", nargs="?", default="run")
     parser.add_argument("--input", required=True)
     parser.add_argument("--out", required=True)

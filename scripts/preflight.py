@@ -35,7 +35,7 @@ def _module(name: str) -> dict[str, object]:
 
 def main() -> int:
     binaries = {name: _binary(name) for name in ("ffmpeg", "ffprobe", "fc-match")}
-    modules = {name: _module(name) for name in ("numpy", "cv2", "rapidocr_onnxruntime")}
+    modules = {name: _module(name) for name in ("numpy", "cv2", "rapidocr_onnxruntime", "requests")}
     passed = all(value["found"] and value.get("version_exit_code") == 0 for value in binaries.values())
     passed = passed and all(value["importable"] for value in modules.values())
     payload = {

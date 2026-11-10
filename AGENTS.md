@@ -1,32 +1,28 @@
-# Omni Phase-1 agent contract
+# Omni 第一阶段 agent contract
 
-## Hard execution boundary
+## 工作目标
 
-This public repository is a **local-only** media processor. It has no remote
-connector, credential, Bitable row selector, downloader, uploader, dispatcher,
-queue, lock, or remote SHA-256 readback implementation.
+本仓库的正常生产路径是：经私有飞书绑定后，自动读取“剧情” view 中未完成的剧情行，逐行处理、上传、远端 SHA 校验、回填，再继续下一行。
 
-- Never access Feishu, MCP, browser business pages, credentials, or any remote
-  record while following this repository's Phase-1 instructions.
-- A local PASS, a generated contract JSON, a historical document, or a previous
-  conversation never authorizes a remote action.
-- If a repository document conflicts with the current explicit task or
-  `WORKBUDDY_TEST.md`, follow the current explicit task and stop at the local
-  boundary.
-- Do not claim remote automation capability from a successful local run.
+本地 ClipFlow 核心与远端 worker 是分层的。核心不联网；只有 omni-phase1 加 --apply 才获准执行飞书读写。
 
-## Local quality gates
+## 不可变边界
 
-Use only this v0.6 source tree. Do not select or reconstruct an earlier release
-as a fallback.
+- 目标 view 必须由私有 URL 精确绑定并且名称为“剧情”；不能使用聊天 view。
+- 只处理二次分类型含“剧情”的行；不能用通用“状态”字段替代队列条件。
+- 使用对标视频、图文 作为输入，处理后音、视频 作为追加输出，执行记录和 ClipFlow 专用字段作为审计状态。
+- 不打印或提交任何凭据、私有 URL、token、Cookie、附件 token、源视频或用户数据。
+- 不走浏览器业务页面，不用手动点击替代 API。
+- 任何缺少可见画面句末证据的 ClipFlow 结果必须 HOLD；禁止 ASR、猜测、伪造 review 或伪造成功。
+- 永不删除、替换或覆盖已有输出附件。
+- 没有三件远端附件的完整 SHA-256 回读匹配时，不得标记 COMPLETED。
 
-Before encoding, require a verified local input video, reliable multi-frame
-visible text, and verified sentence endpoints. A failure is a
-`cut_conflict.json` HOLD, not an approximate cut. Never relax the `(3, 8]`
-duration contract.
+## 执行门槛
 
-## Result language
+1. 先运行 check-config；绑定或权限错误时停止。
+2. 首次只运行一次 bootstrap --apply；它只能创建 worker 文本字段。
+3. 先运行 plan，再运行单实例 drain --apply。
+4. 运行后再次 plan；报告实际队列状态，不夸大为“全部完成”。
+5. 中断后从同一命令恢复；先查运行 ID、租约、远端附件和本地运行收据。
 
-Report a local PASS only when the local artifacts and local verification pass.
-Report HOLD when visual evidence is insufficient. Neither result implies that
-any remote system was read, changed, or is ready for automation.
+仓库文档与当前明确任务冲突时，当前明确任务优先；但不得扩大用户给出的飞书授权或泄漏秘密。

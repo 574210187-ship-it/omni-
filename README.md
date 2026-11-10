@@ -1,95 +1,141 @@
-# Omni 第一阶段 — ClipFlow Visual v0.6.1
+# Omni 第一阶段 — 剧情队列端到端执行器 v0.7.0
 
-`omni第一阶段` 是 ClipFlow 的**第一阶段、本地可执行**版本：它只根据视频解码后的可见画面字幕规划切点、输出视频切段和三件固定交付物。
+这是可以交给 WorkBuddy 执行的第一阶段完整流程，不只是本地剪辑程序。
 
-它适合让 WorkBuddy 或任意 Linux/macOS worker 下载后先做环境验证和本地试跑。它不是飞书多维表自动化成品，也不包含任何账号、Cookie、API Key、表格 ID、视频样本或生产数据。
+~~~
+私有飞书绑定
+→ 核对“剧情”视图与字段
+→ 自动找出未完成的剧情行
+→ 单行认领与租约
+→ 下载源视频、仅按可见画面处理
+→ 追加三件成品
+→ 下载回读并逐件 SHA-256 校验
+→ 回填状态、运行 ID、输入 SHA、证据和执行记录
+→ 下一行，直到当前可执行队列清空
+~~~
 
-## 本仓库包含什么
+公开仓库绝不含飞书凭据、真实 Bitable URL/ID、附件、视频或业务记录。它通过私有环境变量完成一次性绑定；之后 omni-phase1 drain --apply 会串行处理当前“剧情”队列。
 
-- 只使用可见视频帧的 OCR；不打开、不转写、不推断音频。
-- 严格切段门槛：每段必须满足 `3.000 < 时长 <= 8.000` 秒。
-- 切点必须是经可见字幕证实的句末；无法证实时生成 `cut_conflict.json` 并以 HOLD 停止，不会猜切或伪造输出。
-- PASS 时生成固定三件交付物：`videos_and_screenshot.zip`、`supporting_materials.zip`、`文案.txt`。
-- 每段 MP4 都有对应首帧候选截图和 `C001` 风格编号水印。
-- 可重复运行的质量契约单元测试和环境预检脚本。
+## 两层程序，职责明确
 
-## 明确不包含什么
+- clipflow-visual：严格的本地视觉处理核心。只使用视频已解码画面中的可见字幕；不使用 ASR。每段必须满足 3.000 < 时长 <= 8.000 秒，且切点必须有可见句末证据。
+- omni-phase1：飞书 Bitable worker。负责视图校验、选择行、租约、下载、执行核心、上传、追加附件、远端 SHA-256 回读、回填与恢复。
 
-- 不会选取、锁定或扫描飞书多维表记录。
-- 不会下载或上传飞书附件，也不会改写任何单元格。
-- 不含 WorkBuddy dispatcher、队列、锁、重试、幂等上传或远端 SHA-256 回读实现。
-- 不含任何真实视频、飞书链接、app/table/view ID、凭据或用户数据。
+本地核心仍生成 local_delivery_contract.json，表示核心本身不会偷偷联网。只有 omni-phase1 加 --apply 才会调用飞书 API；没有 --apply 的命令是只读或预览。
 
-因此，WorkBuddy 对本仓库的第一阶段验收只能是“能安装、能通过测试、能对**其自行提供且获授权**的视频进行本地运行”。任何飞书读写必须作为下一阶段独立实现和验收。
+## 绝对范围
 
-## 运行前置条件
+- 只接受私有绑定中 expected_view_name: 剧情 的精确 view ID；视图名或 ID 不匹配立即停止。
+- 只处理 二次分类型 值含有 剧情 的记录；不会再进入“聊天”。
+- 不读取或改写通用 状态 字段。worker 只使用 ClipFlow状态 等专用字段。
+- 输出固定追加到 处理后音、视频：videos_and_screenshot.zip、supporting_materials.zip、文案.txt。
+- 每件附件都必须下载回本地，并与本地交付物作 SHA-256 比对；未通过不得标记 COMPLETED。
+- 任何视觉证据不足、输入不存在、输出冲突或无法安全恢复的行都会写为 HOLD 并继续下一行；不会编造产物或覆盖既有附件。
 
-- Python 3.10 或更高版本
-- `ffmpeg` 与 `ffprobe`
-- `fc-match`（来自 Fontconfig，用于水印字体定位）
-- Python 包：`numpy`、`opencv-python-headless`、`rapidocr-onnxruntime`（由 `pip install -e .` 安装）
+## 一次性飞书准备
 
-首次执行 OCR 时，底层 OCR 运行时可能需要准备模型资产；请让执行环境遵守自己的网络与缓存策略，不要借此访问任何业务系统。
+请先按 [FEISHU_PERMISSIONS.md](FEISHU_PERMISSIONS.md) 给自建飞书应用授权，并把该应用加入目标多维表的高级权限。然后在 WorkBuddy 的私有 Secrets 中设置：
 
-## 最小环境验证
+~~~
+FEISHU_APP_ID
+FEISHU_APP_SECRET
+FEISHU_BITABLE_URL
+~~~
 
-```bash
-git clone https://github.com/574210187-ship-it/omni-.git omni-phase1
+FEISHU_BITABLE_URL 必须是剧情视图的完整 Bitable URL，且 URL 必须带 table= 与 view=。程序从该 URL 精确提取 app/table/view，不会扫描账号中的其它表。
+
+复制安全模板到被忽略的私有目录：
+
+~~~bash
+mkdir -p .workbuddy
+cp job-config.example.json .workbuddy/job-config.json
+~~~
+
+模板默认映射的是当前业务字段：
+
+| 用途 | 字段 |
+| --- | --- |
+| 剧情筛选 | 二次分类型 = 剧情 |
+| 输入附件 | 对标视频、图文 |
+| 输出附件 | 处理后音、视频 |
+| 审计日志 | 执行记录 |
+| 专用 worker 状态 | ClipFlow状态、ClipFlow运行ID、ClipFlow锁到期、ClipFlow输入SHA、ClipFlow错误码/证据 |
+
+首次 bootstrap --apply 只会创建缺失的六个文本 worker 字段；不会修改任何记录。
+
+## WorkBuddy 的完整执行指令
+
+把 [WORKBUDDY_NEW_WINDOW_PROMPT.md](WORKBUDDY_NEW_WINDOW_PROMPT.md) 整段复制到一个全新 WorkBuddy 窗口。它规定了从 clone、私有绑定、权限验收到 drain、最终回读的完整顺序和停止条件。
+
+## 安装与手动命令
+
+~~~bash
+git clone --depth 1 https://github.com/574210187-ship-it/omni-.git omni-phase1
 cd omni-phase1
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e .
+~~~
+
+若执行环境已经提供可信系统 CA、但 Python 默认路径遗漏它而导致 CERTIFICATE_VERIFY_FAILED，可显式指定该可信 CA，例如：
+
+~~~bash
+PIP_CERT=/etc/ssl/certs/ca-certificates.crt python -m pip install -e .
+~~~
+
+不得使用 --trusted-host、-k 或关闭 TLS 校验。
+
+执行顺序：
+
+~~~bash
+omni-phase1 --config .workbuddy/job-config.json check-config
+omni-phase1 --config .workbuddy/job-config.json bootstrap --apply
+omni-phase1 --config .workbuddy/job-config.json plan
+omni-phase1 --config .workbuddy/job-config.json drain --apply
+omni-phase1 --config .workbuddy/job-config.json plan
+~~~
+
+plan 永远只读。drain --apply 固定单进程、单行串行。中断后再次执行相同命令：它会先读取状态、租约和既有附件，不会盲目覆盖或重复追加。
+
+## 状态机
+
+~~~
+READY
+  → CLAIMED → VALIDATING → RUNNING → UPLOADING → VERIFYING → COMPLETED
+                                        │
+                                        ├─ 恢复时先查已有附件与本地运行收据
+                                        └─ SHA 不同/同名冲突 → HOLD
+
+任何可见画面证据不足、输入异常、部分输出无安全收据
+  → HOLD
+
+临时网络/系统问题
+  → RETRYABLE
+~~~
+
+飞书 Bitable 没有跨 worker 的 compare-and-swap 锁。因此必须只运行一个 drain worker；程序本地锁与远端租约降低重复执行风险，并在每次远端写入前重新读取运行 ID/租约。
+
+## 本地质量验证
+
+~~~bash
 python scripts/preflight.py
 python -m unittest discover -s tests -v
 clipflow-visual --help
-```
+omni-phase1 --help
+~~~
 
-上述命令没有处理真实视频、没有连接飞书，也没有任何外部写入。
+这些验证不等于已连接飞书。只有私有绑定完成后，check-config、bootstrap --apply、drain --apply 的实际远端读回才构成端到端验收。
 
-### 受管环境的 TLS/CA 提示
+## 文档
 
-如果 `pip` 报 `CERTIFICATE_VERIFY_FAILED`，先确认执行环境网络是获准的，并使用该环境提供的可信系统 CA 文件；不要用 `--trusted-host`、`-k` 或关闭证书验证。例如，Linux 环境明确将系统 CA 绑定在 `/etc/ssl/certs/ca-certificates.crt` 时：
+- [FEISHU_PERMISSIONS.md](FEISHU_PERMISSIONS.md)：一次性需要开通的飞书权限与表级授权
+- [WORKBUDDY_NEW_WINDOW_PROMPT.md](WORKBUDDY_NEW_WINDOW_PROMPT.md)：可直接粘贴的新窗口完整指令
+- [WORKFLOW.md](WORKFLOW.md)：行选择、恢复、幂等和验收规则
+- [PUBLIC_SCOPE.md](PUBLIC_SCOPE.md)：公开边界与验收定义
+- [SOURCE_PROVENANCE.md](SOURCE_PROVENANCE.md)：源代码与发布沿革
 
-```bash
-PIP_CERT=/etc/ssl/certs/ca-certificates.crt python -m pip install -e .
-```
-
-该路径仅是常见 Linux 示例；应以执行环境的实际可信 CA 配置为准。
-
-## 本地视频试跑
-
-仅使用已授权的非敏感测试视频，并把输出放在一个**不存在或为空**的目录中：
-
-```bash
-clipflow-visual run --input /absolute/path/to/test.mp4 --out ./output
-```
-
-退出语义：
-
-- `0`：本地 PASS，输出目录包含三件固定交付物。
-- `2`：安全 HOLD，输出 `cut_conflict.json`；这不是可用的媒体结果，不能上传或当作失败后自动重试的理由。
-- `1`：环境或输入错误；根据输出中的原因修复后再从空目录重试。
-
-当画面字幕足够清晰且可见句末能自动确认时，程序可直接 PASS。若句末需要人工视觉确认，先保留第一次输出中的 `visual_ocr_timeline.json`，生成与该文件 SHA-256 精确绑定的 `review.json`，再用**新的空输出目录**重新运行：
-
-```bash
-clipflow-visual run --input /absolute/path/to/test.mp4 --out ./output-reviewed --review-json /absolute/path/to/review.json
-```
-
-`review.json` 的证据来源只能是 `visible_video_frames_only`；不得用 ASR、口述内容或猜测来填充它。
-
-## 给 WorkBuddy 的测试说明
-
-直接交给 WorkBuddy 的受限测试任务在 [WORKBUDDY_TEST.md](WORKBUDDY_TEST.md)。它强制先做本地预检和单元测试，并禁止在第一阶段访问飞书、输入凭据或对外上传文件。
-
-## 项目资料
-
-- [PUBLIC_SCOPE.md](PUBLIC_SCOPE.md)：公开第一阶段边界与验收标准
-- [SOURCE_PROVENANCE.md](SOURCE_PROVENANCE.md)：源代码基线与许可证说明
-- [AGENTS.md](AGENTS.md)：处理门槛
-
-GitHub 仓库 slug 为 `omni-`；项目可读名称为“Omni 第一阶段”。
+GitHub slug 为 omni-；项目展示名称为“Omni 第一阶段”。
 
 ## 许可证
 

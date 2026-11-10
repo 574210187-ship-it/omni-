@@ -24,4 +24,5 @@ supporting_materials.zip
 *.webm
 .env
 .workbuddy/
+.omni-phase1/
 .gh-auth/

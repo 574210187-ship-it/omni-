@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "credentials": {
+    "app_id": "${FEISHU_APP_ID}",
+    "app_secret": "${FEISHU_APP_SECRET}",
+    "api_base": "https://open.feishu.cn"
+  },
+  "target": {
+    "bitable_url": "${FEISHU_BITABLE_URL}",
+    "expected_view_name": "剧情"
+  },
+  "fields": {
+    "category": "二次分类型",
+    "input_attachments": "对标视频、图文",
+    "output_attachments": "处理后音、视频",
+    "audit": "执行记录",
+    "status": "ClipFlow状态",
+    "run_id": "ClipFlow运行ID",
+    "lease_until": "ClipFlow锁到期",
+    "input_sha256": "ClipFlow输入SHA",
+    "evidence": "ClipFlow错误码/证据"
+  },
+  "queue": {
+    "category_value": "剧情",
+    "lease_seconds": 7200,
+    "max_input_bytes": 2000000000
+  },
+  "runtime": {
+    "work_root": ".omni-phase1"
+  }
+}
