@@ -1,4 +1,4 @@
-# Omni 第一阶段 — ClipFlow Visual v0.6.0
+# Omni 第一阶段 — ClipFlow Visual v0.6.1
 
 `omni第一阶段` 是 ClipFlow 的**第一阶段、本地可执行**版本：它只根据视频解码后的可见画面字幕规划切点、输出视频切段和三件固定交付物。
 
